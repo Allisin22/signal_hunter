@@ -11,15 +11,19 @@ def calculate_responses(records):
   responses = []
 
   for record in records:
-      response = record["current"] / record["voltage"]
+    if record["voltage"] == 0:
+      print(f"{record['trial_id']}: response cannot be calculated with zero voltage.")
+      continue
 
-      result = {
-          "trial_id": record["trial_id"],
-          "frequency_hz": record["frequency_hz"],
-          "response": response
-      }
+    response = record["current"] / record["voltage"]
 
-      responses.append(result)
+    result = {
+      "trial_id": record["trial_id"],
+      "frequency_hz": record["frequency_hz"],
+      "response": response
+  }
+
+    responses.append(result)
 
   return responses
 
@@ -63,6 +67,15 @@ def plot_responses(responses, peak):
 
   plt.plot(frequencies, response_values, marker="o")
 
+  for result in responses:
+    plt.annotate(
+      result["trial_id"],
+      (result["frequency_hz"], result["response"]),
+      xytext=(0, 8),
+      textcoords="offset points",
+      ha="center"
+    )
+
   plt.xlabel("Frequency (Hz)")
   plt.ylabel("Respomses (A/V)")
   plt.title("Signal Hunter: Frequency Sweep")
@@ -86,7 +99,19 @@ def main():
 
   sweep_records = load_sweep(file_name)
 
+  if not sweep_records:
+    print("No measurements to analyze; dataset empty.")
+
+    return
+
   responses = calculate_responses(sweep_records)
+
+  responses = calculate_responses(sweep_records)
+
+  if not responses:
+    print("No usable responses to analyze.")
+    return
+
   responses = sorted(responses, key=get_frequency)
 
   for result in responses:
