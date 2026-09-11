@@ -1,0 +1,51 @@
+[
+  {
+    "trial_id": "T001",
+    "frequency_hz": 100.0,
+    "voltage": 5.0,
+    "current": 0.010,
+    "temperature": 295.0
+  },
+  {
+    "trial_id": "T002",
+    "frequency_hz": 200.0,
+    "voltage": 5.0,
+    "current": 0.018,
+    "temperature": 295.0
+  },
+  {
+    "trial_id": "T003",
+    "frequency_hz": 300.0,
+    "voltage": 5.0,
+    "current": 0.035,
+    "temperature": 295.0
+  },
+  {
+    "trial_id": "T004",
+    "frequency_hz": 400.0,
+    "voltage": 5.0,
+    "current": 0.050,
+    "temperature": 295.0
+  },
+  {
+    "trial_id": "T005",
+    "frequency_hz": 500.0,
+    "voltage": 5.0,
+    "current": 0.032,
+    "temperature": 295.0
+  },
+  {
+    "trial_id": "T006",
+    "frequency_hz": 600.0,
+    "voltage": 5.0,
+    "current": 0.019,
+    "temperature": 295.0
+  },
+  {
+    "trial_id": "T007",
+    "frequency_hz": 700.0,
+    "voltage": 5.0,
+    "current": 0.012,
+    "temperature": 295.0
+  }
+]

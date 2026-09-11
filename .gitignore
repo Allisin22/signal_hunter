@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+.env
+
+peak_1.png
+peak_2.png
