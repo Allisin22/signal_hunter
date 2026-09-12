@@ -56,3 +56,26 @@ def test_all_zero_voltages():
 
   assert responses == []
   assert len(responses) == 0
+
+def test_invalid_numeric_values_are_skipped():
+  records = [
+    {"trial_id": "T001", "frequency_hz": 100.0, "current": "hello", "voltage": 5.0},
+    {"trial_id": "T002", "frequency_hz": 200.0, "current": True, "voltage": 5.0},
+    {"trial_id": "T003", "frequency_hz": 300.0, "current": 0.019, "voltage": 5.0}
+  ]
+
+  responses = calculate_responses(records)
+
+  assert len(responses) == 1
+  assert responses[0]["trial_id"] == "T003"
+
+def test_missing_current_is_skipped():
+  records = [
+    {"trial_id": "T001", "frequency_hz": 100.0, "voltage": 5.0},
+    {"trial_id": "T002", "frequency_hz": 200.0, "current": 0.02, "voltage": 5.0}
+  ]
+
+  responses = calculate_responses(records)
+
+  assert len(responses) == 1
+  assert responses[0]["trial_id"] == "T002"

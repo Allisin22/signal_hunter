@@ -2,15 +2,57 @@ import json
 import matplotlib.pyplot as plt
 
 def load_sweep(file_name):
-  with open("frequency_sweep.json", "r") as file:
-    sweep_records = json.load(file)
+  try:
+    with open("frequency_sweep.json", "r") as file:
+      sweep_records = json.load(file)
+
+  except FileNotFoundError:
+    print(f"{file_name} could not be located.")
+    sweep_records = []
+
+  except json.JSONDecodeError:
+    print(f"{file_name} contains invalid JSON syntax.")
+    sweep_records = []
+
+  if not isinstance(sweep_records, list):
+    print("Expected a list of measurements.")
+    return []
 
   return sweep_records
 
 def calculate_responses(records):
   responses = []
+  required_fields = ["trial_id", "frequency_hz", "current", "voltage"]
+  numeric_fields = ["frequency_hz", "current", "voltage"]
 
   for record in records:
+    if not isinstance(record, dict):
+      print("Skipping measurement: expected a dictionary.")
+      continue
+
+    missing_fields = []
+
+    for field in required_fields:
+      if field not in record:
+        missing_fields.append(field)
+
+    if missing_fields:
+      trial_id = record.get("trial_id", "Unknown trial")
+      print(f"Skipping measurement: missing {trial_id}, {missing_fields}")
+      continue
+
+    invalid_fields = []
+
+    for field in numeric_fields:
+      value = record[field]
+
+      if not isinstance(value, (int, float)) or isinstance(value, bool):
+        invalid_fields.append(field)
+
+    if invalid_fields:
+      print(f"Skipping {record['trial_id']}: nonnumeric values in {invalid_fields}")
+      continue
+
     if record["voltage"] == 0:
       print(f"{record['trial_id']}: response cannot be calculated with zero voltage.")
       continue
@@ -21,7 +63,7 @@ def calculate_responses(records):
       "trial_id": record["trial_id"],
       "frequency_hz": record["frequency_hz"],
       "response": response
-  }
+    }
 
     responses.append(result)
 
@@ -103,8 +145,6 @@ def main():
     print("No measurements to analyze; dataset empty.")
 
     return
-
-  responses = calculate_responses(sweep_records)
 
   responses = calculate_responses(sweep_records)
 
