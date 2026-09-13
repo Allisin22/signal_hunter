@@ -41,7 +41,7 @@ def test_zero_voltage_is_skipped():
     {"trial_id": "T002", "frequency_hz": 200.0, "current": 0.02, "voltage": 5.0}
   ]
 
-  responses = calculate_responses(records)
+  responses, rejected_records = calculate_responses(records)
 
   assert len(responses) == 1
   assert responses[0]["trial_id"] == "T002"
@@ -52,7 +52,7 @@ def test_all_zero_voltages():
     {"trial_id": "T002", "frequency_hz": 200.0, "current": 0.02, "voltage": 0}
   ]
 
-  responses = calculate_responses(records)
+  responses, rejected_records = calculate_responses(records)
 
   assert responses == []
   assert len(responses) == 0
@@ -64,7 +64,7 @@ def test_invalid_numeric_values_are_skipped():
     {"trial_id": "T003", "frequency_hz": 300.0, "current": 0.019, "voltage": 5.0}
   ]
 
-  responses = calculate_responses(records)
+  responses, rejected_records  = calculate_responses(records)
 
   assert len(responses) == 1
   assert responses[0]["trial_id"] == "T003"
@@ -75,7 +75,56 @@ def test_missing_current_is_skipped():
     {"trial_id": "T002", "frequency_hz": 200.0, "current": 0.02, "voltage": 5.0}
   ]
 
-  responses = calculate_responses(records)
+  responses, rejected_records = calculate_responses(records)
 
   assert len(responses) == 1
   assert responses[0]["trial_id"] == "T002"
+
+  assert len(rejected_records) == 1
+  report = rejected_records[0]
+
+  assert report["invalid_fields"] == ["current"]
+  assert report["record"]["trial_id"] == "T001"
+
+def test_out_of_range_values_are_reported():
+  records = [
+    {"trial_id": "T006", "frequency_hz": 0, "current": -0.019, "voltage": 5.0}
+  ]
+
+  responses, rejected_records = calculate_responses(records)
+
+  assert responses == []
+  assert len(rejected_records) == 1
+
+  report = rejected_records[0]
+
+  assert report["invalid_fields"] == ["frequency_hz", "current"]
+
+def test_nonfinite_current_is_rejected():
+  records = [
+    {"trial_id": "T001", "frequency_hz": 100.0, "current": float("nan"), "voltage": 5.0}
+  ]
+
+  responses, rejected_records = calculate_responses(records)
+
+  assert responses == []
+  assert len(rejected_records) == 1
+
+  report = rejected_records[0]
+
+  assert report["invalid_fields"] == ["current"]
+  assert report["reason"] == "nonfinite numeric values"
+
+def test_blank_trial_id_is_rejected():
+  records = [
+    {"trial_id": "   ", "frequency_hz": 100.0, "current": 0.019, "voltage": 5.0}
+  ]
+
+  responses, rejected_records = calculate_responses(records)
+
+  assert responses == []
+  assert len(rejected_records) == 1
+
+  report = rejected_records[0]
+  assert report["invalid_fields"] == ["trial_id"]
+  assert report["reason"] == "trial_id must be a nonblank string"

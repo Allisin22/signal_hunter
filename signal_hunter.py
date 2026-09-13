@@ -1,9 +1,10 @@
 import json
 import matplotlib.pyplot as plt
+import math
 
 def load_sweep(file_name):
   try:
-    with open("frequency_sweep.json", "r") as file:
+    with open(file_name, "r") as file:
       sweep_records = json.load(file)
 
   except FileNotFoundError:
@@ -22,12 +23,19 @@ def load_sweep(file_name):
 
 def calculate_responses(records):
   responses = []
+  rejected_records = []
   required_fields = ["trial_id", "frequency_hz", "current", "voltage"]
   numeric_fields = ["frequency_hz", "current", "voltage"]
 
   for record in records:
     if not isinstance(record, dict):
-      print("Skipping measurement: expected a dictionary.")
+      rejection_report = {
+        "record": record,
+        "invalid_fields": [],
+        "reason": "measurement is not a dictionary"
+      }
+
+      rejected_records.append(rejection_report)
       continue
 
     missing_fields = []
@@ -37,8 +45,27 @@ def calculate_responses(records):
         missing_fields.append(field)
 
     if missing_fields:
+      rejection_report = {
+        "record": record,
+        "invalid_fields": missing_fields,
+        "reason": "missing required fields"
+      }
+
       trial_id = record.get("trial_id", "Unknown trial")
-      print(f"Skipping measurement: missing {trial_id}, {missing_fields}")
+
+      rejected_records.append(rejection_report)
+      continue
+
+    trial_id = record["trial_id"]
+
+    if not isinstance(trial_id, str) or not trial_id.strip():
+      rejection_report = {
+        "record": record,
+        "invalid_fields": ["trial_id"],
+        "reason": "trial_id must be a nonblank string"
+      }
+
+      rejected_records.append(rejection_report)
       continue
 
     invalid_fields = []
@@ -50,11 +77,60 @@ def calculate_responses(records):
         invalid_fields.append(field)
 
     if invalid_fields:
-      print(f"Skipping {record['trial_id']}: nonnumeric values in {invalid_fields}")
+      rejection_report = {
+        "record": record,
+        "invalid_fields": invalid_fields,
+        "reason": "invalid numeric type"
+      }
+
+      rejected_records.append(rejection_report)
+      continue
+
+    invalid_fields = []
+
+    for field in numeric_fields:
+      if not math.isfinite(record[field]):
+        invalid_fields.append(field)
+
+    if invalid_fields:
+      rejection_report = {
+        "record": record,
+        "invalid_fields": invalid_fields,
+        "reason": "nonfinite numeric values"
+      }
+
+      rejected_records.append(rejection_report)
+      continue
+
+    invalid_fields = []
+
+    if record["frequency_hz"] <= 0:
+      invalid_fields.append("frequency_hz")
+
+    if record["voltage"] < 0:
+      invalid_fields.append("voltage")
+
+    if record["current"] < 0:
+      invalid_fields.append("current")
+
+    if invalid_fields:
+      rejection_report = {
+        "record": record,
+        "invalid_fields": invalid_fields,
+        "reason": "values outside allowed physical range"
+      }
+
+      rejected_records.append(rejection_report)
       continue
 
     if record["voltage"] == 0:
-      print(f"{record['trial_id']}: response cannot be calculated with zero voltage.")
+      rejection_report = {
+        "record": record,
+        "invalid_fields": ["voltage"],
+        "reason": "zero voltage"
+      }
+
+      rejected_records.append(rejection_report)
       continue
 
     response = record["current"] / record["voltage"]
@@ -67,7 +143,7 @@ def calculate_responses(records):
 
     responses.append(result)
 
-  return responses
+  return responses, rejected_records
 
 def find_peak(responses):
   peak = responses[0]
@@ -97,7 +173,7 @@ def inspect_peak(responses, peak):
   else:
     return "the peak is not strictly higher than both immediate neighbors."
 
-def plot_responses(responses, peak):
+def plot_responses(responses, peak, rejected_records):
   frequencies = []
   response_values = []
 
@@ -120,7 +196,10 @@ def plot_responses(responses, peak):
 
   plt.xlabel("Frequency (Hz)")
   plt.ylabel("Respomses (A/V)")
-  plt.title("Signal Hunter: Frequency Sweep")
+  plt.title(
+    f"Signal Hunter: Frequency Sweep\n"
+    f"{len(responses)} usable measurements | {len(rejected_records)} skipped"
+  )
 
   plt.scatter(
     peak["frequency_hz"],
@@ -130,10 +209,56 @@ def plot_responses(responses, peak):
     label="Strongest measured response"
   )
 
+  rejection_label_added = False
+
+  for report in rejected_records:
+    record = report["record"]
+
+    # Check that record is a dictionary before accessing its fields.
+    if not isinstance(record, dict):
+      continue
+
+    frequency = record.get("frequency_hz")
+
+    if not isinstance(frequency, (int, float)) or isinstance(frequency, bool):
+      continue
+
+    if not math.isfinite(frequency) or frequency <= 0:
+      continue
+
+    print("Drawing skipped marker at:", repr(frequency))
+
+    if not rejection_label_added:
+      plt.axvline(
+        x=frequency,
+        color="gray",
+        linestyle="--",
+        label="Skipped measurement"
+      )
+      rejection_label_added = True
+    else:
+      plt.axvline(x=frequency, color="gray", linestyle="--")
+
   plt.legend()
 
 
   plt.show()
+
+def show_rejections(rejected_records):
+  for report in rejected_records:
+    record = report["record"]
+    trial_id = "Unknown trial"
+
+    if isinstance(record, dict):
+      candidate = record.get("trial_id")
+
+      if isinstance(candidate, str) and candidate.strip():
+        trial_id = candidate
+
+    print(
+      f"Skipped {trial_id}: {report['reason']} "
+      f"| fields: {report['invalid_fields']}"
+    )
 
 def main():
   project_name = "Signal Hunter"
@@ -146,9 +271,10 @@ def main():
 
     return
 
-  responses = calculate_responses(sweep_records)
+  responses, rejected_records = calculate_responses(sweep_records)
 
   if not responses:
+    show_rejections(rejected_records)
     print("No usable responses to analyze.")
     return
 
@@ -161,9 +287,13 @@ def main():
   finding = inspect_peak(responses, peak)
   print(finding)
 
+  if rejected_records:
+    print(f"{len(rejected_records)} measurement(s) were skipped; peak assessment uses only usable measurements.")
+
   print(f"Strongest measured response: {peak['trial_id']} | {peak['frequency_hz']} Hz | {peak['response']:.4f} A/V")
 
-  plot_responses(responses, peak)
+  show_rejections(rejected_records)
+  plot_responses(responses, peak, rejected_records)
 
 if __name__ == "__main__":
   main()
