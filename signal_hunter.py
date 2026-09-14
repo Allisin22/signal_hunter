@@ -15,6 +15,14 @@ def load_sweep(file_name):
     print(f"{file_name} contains invalid JSON syntax.")
     sweep_records = []
 
+  except UnicodeDecodeError:
+    print(f"{file_name} could not be decoded as text.")
+    sweep_records = []
+
+  except OSError as error:
+    print(f"{file_name} could not be read: {error}")
+    sweep_records = []
+
   if not isinstance(sweep_records, list):
     print("Expected a list of measurements.")
     return []
@@ -135,6 +143,16 @@ def calculate_responses(records):
 
     response = record["current"] / record["voltage"]
 
+    if not math.isfinite(response):
+      rejection_report = {
+        "record": record,
+        "invalid_fields": ["current", "voltage"],
+        "reason": "calculated response is nonfinite"
+      }
+
+      rejected_records.append(rejection_report)
+      continue
+
     result = {
       "trial_id": record["trial_id"],
       "frequency_hz": record["frequency_hz"],
@@ -172,6 +190,24 @@ def inspect_peak(responses, peak):
     return finding
   else:
     return "the peak is not strictly higher than both immediate neighbors."
+
+def find_duplicate_frequencies(responses):
+  duplicates = []
+
+  if not responses:
+    return duplicates
+
+  previous_frequency = responses[0]["frequency_hz"]
+
+  for result in responses[1:]:
+    frequency = result["frequency_hz"]
+
+    if previous_frequency == frequency and frequency not in duplicates:
+      duplicates.append(frequency)
+
+    previous_frequency = frequency
+
+  return duplicates
 
 def plot_responses(responses, peak, rejected_records):
   frequencies = []
@@ -226,8 +262,6 @@ def plot_responses(responses, peak, rejected_records):
     if not math.isfinite(frequency) or frequency <= 0:
       continue
 
-    print("Drawing skipped marker at:", repr(frequency))
-
     if not rejection_label_added:
       plt.axvline(
         x=frequency,
@@ -279,12 +313,19 @@ def main():
     return
 
   responses = sorted(responses, key=get_frequency)
+  duplicate_frequencies = find_duplicate_frequencies(responses)
 
   for result in responses:
     print(f"{result['trial_id']} | {result['frequency_hz']} Hz | {result['response']:.4f} A/V")
 
   peak = find_peak(responses)
-  finding = inspect_peak(responses, peak)
+  if duplicate_frequencies:
+    finding = (
+      f"Repeated frequencies: {duplicate_frequencies} Hz; "
+      "neighbor assessment cannot be made."
+    )
+  else:
+    finding = inspect_peak(responses, peak)
   print(finding)
 
   if rejected_records:

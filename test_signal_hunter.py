@@ -1,4 +1,10 @@
-from signal_hunter import find_peak, inspect_peak, calculate_responses
+from signal_hunter import (
+  find_peak,
+  inspect_peak,
+  calculate_responses,
+  find_duplicate_frequencies,
+  load_sweep,
+)
 
 def test_find_peak():
   responses = [
@@ -128,3 +134,67 @@ def test_blank_trial_id_is_rejected():
   report = rejected_records[0]
   assert report["invalid_fields"] == ["trial_id"]
   assert report["reason"] == "trial_id must be a nonblank string"
+
+def test_duplicate_frequencies():
+  responses = [
+    {"frequency_hz": 300.0},
+    {"frequency_hz": 400.0},
+    {"frequency_hz": 400.0},
+    {"frequency_hz": 400.0},
+    {"frequency_hz": 500.0}
+  ]
+
+  duplicates = find_duplicate_frequencies(responses)
+
+  assert len(duplicates) == 1
+  assert duplicates == [400]
+
+def test_unique_frequencies():
+  responses = [
+    {"frequency_hz": 300.0},
+    {"frequency_hz": 400.0},
+    {"frequency_hz": 500.0}
+  ]
+
+  duplicates = find_duplicate_frequencies(responses)
+
+  assert duplicates == []
+
+def test_response_overflow_is_rejected():
+  records = [
+  {
+    "trial_id": "T001",
+    "frequency_hz": 100.0,
+    "current": 1e308,
+    "voltage": 1e-308
+  }
+  ]
+
+  responses, rejected_records = calculate_responses(records)
+
+  assert responses == []
+  assert len(rejected_records) == 1
+
+  report = rejected_records[0]
+  assert report["reason"] == "calculated response is nonfinite"
+
+def test_load_invalid_json(tmp_path):
+  file_path = tmp_path / "broken.json"
+  file_path.write_text('{"trial_id":', encoding="utf-8")
+
+  records = load_sweep(file_path)
+
+  assert records == []
+
+def test_load_valid_json(tmp_path):
+  file_path = tmp_path / "valid.json"
+  file_path.write_text(
+    '[{"trial_id": "T001", "frequency_hz": 100.0, "current": 0.01, "voltage": 5.0}]',
+    encoding="utf-8"
+  )
+
+  records = load_sweep(file_path)
+
+  assert len(records) == 1
+  assert records[0]["trial_id"] == "T001"
+  assert records[0]["current"] == 0.01
